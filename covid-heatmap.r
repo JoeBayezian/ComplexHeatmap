@@ -7,9 +7,11 @@ setwd('~/Misc')
 
 df <- read_csv('countries-aggregated.csv')
 
+# define countries of interest
 countries <- c('China','India','US','Indonesia','Brazil',
                'United Kingdom','Germany','France','Italy','Spain')
 
+# create confirmed cases and deaths by day variables from the differences in the totals by day
 sub <- df %>% 
   group_by(Country) %>%
   mutate(Confirmed_by_day=Confirmed-lag(Confirmed,default=first(Confirmed)),
@@ -20,6 +22,7 @@ sub <- df %>%
   summarise(Country,ym,SC=sum(Confirmed_by_day),SD=sum(Deaths_by_day),.groups='drop_last') %>%
   distinct
 
+# create deaths by day matrix to be displayed in the heatmap
 mat <- sub %>%
   select(Country,ym,SD) %>%
   pivot_wider(values_from=SD,names_from=Country) %>%
@@ -29,8 +32,10 @@ mat <- sub %>%
 
 mat <- mat[,countries]
 
+# scale data so countries with large deaths don't skew the heatmap colour scheme - pnorm also brings out better color differentiation
 zmat <- t(pnorm(scale(mat)))
 
+# create similar matrix but this time with confirmed cases which will be overlayed with a step function
 smat <- sub %>% select(Country,ym,SC) %>%
   pivot_wider(values_from=SC,names_from=Country) %>%
   arrange(ym) %>%
@@ -40,8 +45,9 @@ smat <- sub %>% select(Country,ym,SC) %>%
 smat <- smat[,countries]
 
 smat <- t(scale(smat))
-smat['China','2020-02'] <- 3.6
+smat['China','2020-02'] <- 3.6 # z score for china on this day is very large, clip at 3.6
 
+# create heatmap with CH!
 ht <- Heatmap(zmat,
               col = viridisLite::viridis(256),
               cluster_rows = T,
@@ -61,6 +67,7 @@ ht <- Heatmap(zmat,
                           gp=gpar(col=NA,fill='black'))
               })
 
+# create user-defined custom legend
 col_fun = colorRamp2(seq(0,1,length.out=256),viridisLite::viridis(256))
 lgd_list <- list(Legend(col_fun = col_fun,
                         title = '\u03d5(z(Tot. Deaths))',
@@ -76,6 +83,7 @@ lgd_list <- list(Legend(col_fun = col_fun,
                         ))
 
 
+# save output
 cairo_pdf('Heatmap-example.pdf',height=7,width=12)
 draw(ht,annotation_legend_list=lgd_list,annotation_legend_side='bottom')
 dev.off()
